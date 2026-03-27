@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Detection Console – Misinformation Guardian</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="assets/style.css" />
+    <link rel="stylesheet"
+          href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+          crossorigin="anonymous" referrerpolicy="no-referrer" />
+</head>
+
+<body class="dark-body">
+
+<header class="nav">
+    <div class="nav-left">
+        <a href="index.html" class="logo-link">
+            <i class="fa-solid fa-shield-halved logo-icon"></i>
+            <span class="logo-text">Misinformation&nbsp;Guardian</span>
+        </a>
+    </div>
+    <nav class="nav-links">
+        <a href="index.html#home"><i class="fa-solid fa-house"></i> Home</a>
+        <a href="index.html#about"><i class="fa-solid fa-circle-info"></i> About</a>
+        <a href="#"><i class="fa-solid fa-vial"></i> Test News</a>
+    </nav>
+</header>
+
+<section class="detect-hero">
+    <video class="bg-video" autoplay muted loop playsinline>
+        <source src="assets/video.mp4" type="video/mp4">
+        Your browser does not support HTML5 video.
+    </video>
+    <div class="hero-overlay"></div>
+
+    <div class="detect-container gradient-card">
+        <h1><i class="fa-solid fa-vial"></i> Detection Console</h1>
+        <p class="detect-subtitle">
+            Upload suspicious content below. The backend will analyze <strong>text</strong> and
+            <strong>image</strong> together and return a combined verdict.
+        </p>
+
+        <form class="detect-form" method="POST" enctype="multipart/form-data" action="/predict">
+            <div class="form-row mode-toggle">
+                <label>Mode</label>
+                <div class="mode-options">
+                    <button type="button" data-mode="text" class="mode-btn">Text only</button>
+                    <button type="button" data-mode="image" class="mode-btn">Image only</button>
+                    <button type="button" data-mode="both" class="mode-btn mode-btn-active">Both</button>
+                </div>
+            </div>
+            
+            <div class="form-row" id="text-input-row">
+                <label for="news_text">News Text / Caption</label>
+                <textarea id="news_text" name="news_text"
+                          placeholder="Paste the headline or article here..."
+                          rows="5" required></textarea>
+            </div>
+
+            <div class="form-row">
+                <label for="language">Language</label>
+                <select id="language" name="language">
+                    <option value="auto">Auto Detect Language</option>
+                    <option value="en" selected>English</option>
+                    <option value="hi">Hindi</option>
+                    <option value="mr">Marathi</option>
+                    <option value="te">Telugu</option>
+                </select>
+            </div>
+
+            <div class="form-row" id="image-input-row">
+                <label for="news_image">Image (optional)</label>
+                <input id="news_image" name="news_image" type="file"
+                       accept="image/png, image/jpeg" />
+                <small>Upload a related image or suspected deepfake.</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-full">
+                <i class="fa-solid fa-magnifying-glass-chart"></i>
+                Run Detection
+            </button>
+            
+            <input type="hidden" name="detection_mode" id="detection_mode_input" value="both">
+        </form>
+
+        <div class="result-panel glass">
+            <h2>Result</h2>
+
+            <div id="ai-loader" class="ai-pulse hidden">
+                <div class="ai-orbit">
+                    <span class="ai-dot"></span>
+                </div>
+                <span class="ai-text">Analyzing with AI…</span>
+            </div>
+
+            <div id="result-content" class="result-content">
+                <p class="placeholder">
+                    The prediction (REAL / FAKE) and confidence will appear here.
+                </p>
+            </div>
+        </div>
+
+    </div>
+</section>
+
+<script>
+   
+    const form = document.querySelector(".detect-form");
+    const aiLoader = document.getElementById("ai-loader");
+    const resultContent = document.getElementById("result-content");
+    const submitBtn = form.querySelector("button[type='submit']");
+    const modeButtons = document.querySelectorAll(".mode-btn");
+    
+    
+    const textRow = document.getElementById("text-input-row");
+    const imageRow = document.getElementById("image-input-row");
+    const newsText = document.getElementById("news_text");
+    const newsImage = document.getElementById("news_image");
+    const modeHiddenInput = document.getElementById("detection_mode_input");
+
+    function updateMode(mode) {
+
+        textRow.style.display = 'block';
+        imageRow.style.display = 'block';
+        newsText.removeAttribute('required');
+        newsImage.removeAttribute('required');
+        
+        
+        modeHiddenInput.value = mode;
+
+        
+        modeButtons.forEach(btn => btn.classList.remove('mode-btn-active'));
+        document.querySelector(`[data-mode="${mode}"]`).classList.add('mode-btn-active');
+
+        if (mode === 'text') {
+            
+            imageRow.style.display = 'none';
+            newsText.setAttribute('required', 'required');
+        } else if (mode === 'image') {
+            
+            textRow.style.display = 'none';
+            newsImage.setAttribute('required', 'required');
+        } else {
+            
+            newsText.setAttribute('required', 'required');
+        }
+    }
+    
+    
+    modeButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            updateMode(button.getAttribute('data-mode'));
+        });
+    });
+
+    
+    updateMode('both'); 
+
+    
+    function updateResult(data) {
+        const verdict = data.verdict;
+        const confidence = String(data.confidence_score).replace('%', ''); 
+        const reasoning = data.reasoning;
+        const claims = data.claims_status || [];
+
+        const verdictClass = verdict === "REAL" ? "result-real" : "result-fake";
+        const icon = verdict === "REAL" ? "fa-circle-check" : "fa-circle-xmark";
+        const uncertainty = 100 - parseInt(confidence);
+
+        let claimsHtml = claims.map(claim => `
+            <li class="${claim.status ? claim.status.toLowerCase() : 'unverifiable'}">
+                <i class="fa-solid fa-check-circle claim-icon"></i>
+                <strong>Claim Status:</strong> ${claim.status || 'N/A'} - <span>${claim.claim}</span>
+            </li>
+        `).join('');
+        
+        const claimsSection = modeHiddenInput.value === 'image' 
+            ? '' 
+            : `<h3 class="result-header"><i class="fa-solid fa-list-check"></i> Claims Verification</h3>
+               <ul class="claims-list">${claimsHtml || '<li>No specific claims were verified or returned by the model.</li>'}</ul>`;
+
+        resultContent.innerHTML = `
+            <div class="result-verdict ${verdictClass}">
+                <i class="fa-solid ${icon}"></i> 
+                <span>${verdict}</span> 
+                <small>Combined Model Confidence</small>
+            </div>
+
+            <div class="confidence-bar">
+                <div class="bar-fill" style="width: ${confidence}%;" data-confidence="${confidence}%"></div>
+            </div>
+            <div class="confidence-labels">
+                <span class="conf-real ${verdictClass}">${confidence}% ${verdict}</span>
+                <span class="conf-fake">
+                    ${uncertainty > 0 ? `${uncertainty}% UNCERTAIN` : ''}
+                </span>
+            </div>
+
+            <h3 class="result-header"><i class="fa-solid fa-brain"></i> Model Reasoning</h3>
+            <p class="result-reasoning">${reasoning}</p>
+
+            ${claimsSection}
+        `;
+    }
+
+   
+    form.addEventListener("submit", async function (e) {
+        e.preventDefault();
+        
+        const currentMode = modeHiddenInput.value;
+        if (currentMode === 'text' && !newsText.value.trim()) {
+            alert("Please enter news text.");
+            return;
+        }
+        if (currentMode === 'image' && newsImage.files.length === 0) {
+            alert("Please upload an image.");
+            return;
+        }
+
+        aiLoader.classList.remove("hidden");
+        resultContent.innerHTML = "";
+        submitBtn.disabled = true;
+        
+        const formData = new FormData(form);
+
+        try {
+            const response = await fetch("/predict", {
+                method: "POST",
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`HTTP error! Status: ${response.status}. Message: ${errorData.error || 'Server error.'}`);
+            }
+
+            const data = await response.json();
+            
+            if (data.verdict && data.confidence_score) {
+                updateResult(data);
+            } else {
+                resultContent.innerHTML = `<p class="error-msg">Error: Invalid model output structure. Please check backend response.</p>`;
+            }
+
+        } catch (error) {
+            console.error("Detection Error:", error);
+            resultContent.innerHTML = `<p class="error-msg">API ERROR: Failed to process request: ${error.message}</p>`;
+        } finally {
+            aiLoader.classList.add("hidden");
+            submitBtn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,2 @@
+$env:GEMINI_API_KEY="AIzaSyAlheoOs838r9SKTs4wbJlxevHORyhTLhk"
+python app.py
